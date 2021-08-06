@@ -30,13 +30,13 @@ class FQFAgent(BaseAgent):
 
         # Online network.
         self.online_net = FQF(
-            num_channels=env.observation_space.shape[0],
+            obs_shape=env.observation_space.shape,
             num_actions=self.num_actions, N=N,
             num_cosines=num_cosines, dueling_net=dueling_net,
             noisy_net=noisy_net).to(self.device)
         # Target network.
         self.target_net = FQF(
-            num_channels=env.observation_space.shape[0],
+            obs_shape=env.observation_space.shape,
             num_actions=self.num_actions, N=N,
             num_cosines=num_cosines, dueling_net=dueling_net,
             noisy_net=noisy_net, target=True).to(self.device)

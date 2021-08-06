@@ -243,6 +243,23 @@ class ScaledFloatFrame(gym.ObservationWrapper):
         return np.array(observation).astype(np.float32) / 255.0
 
 
+class Transpose(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        space = env.observation_space
+        shape = space.shape
+        assert isinstance(space, spaces.Box) and len(shape) == 3
+        new_shape = (shape[2], shape[0], shape[1])
+        new_low = np.transpose(space.low, (2, 0, 1))
+        new_high = np.transpose(space.high, (2, 0, 1))
+        self.observation_space = spaces.Box(
+            low=new_low, high=new_high, shape=new_shape,
+            dtype=space.dtype)
+
+    def observation(self, observation):
+        return np.transpose(observation, (2, 0, 1))
+
+
 class LazyFrames(object):
     def __init__(self, frames):
         self._frames = frames
@@ -279,7 +296,7 @@ def make_atari(env_id):
 
 
 def wrap_deepmind_pytorch(env, episode_life=True, clip_rewards=True,
-                          frame_stack=True, scale=False):
+                          frame_stack=True, scale=False, atari=True):
     """
     Configure environment for DeepMind-style Atari.
     :param env: (Gym Environment) the atari environment
@@ -291,9 +308,10 @@ def wrap_deepmind_pytorch(env, episode_life=True, clip_rewards=True,
     """
     if episode_life:
         env = EpisodicLifeEnv(env)
-    if 'FIRE' in env.unwrapped.get_action_meanings():
+    if atari and 'FIRE' in env.unwrapped.get_action_meanings():
         env = FireResetEnv(env)
-    env = WarpFramePyTorch(env)
+    if atari:
+        env = WarpFramePyTorch(env)
     if clip_rewards:
         env = ClipRewardEnv(env)
     if scale:
@@ -304,10 +322,17 @@ def wrap_deepmind_pytorch(env, episode_life=True, clip_rewards=True,
 
 
 def make_pytorch_env(env_id, episode_life=True, clip_rewards=True,
-                     frame_stack=True, scale=False):
-    env = make_atari(env_id)
+                     frame_stack=True, scale=False, atari=True):
+    if atari:
+        env = make_atari(env_id)
+    else:
+        env = gym.make(env_id)
+        # assume that observations are H*W*C (normally atari preproc takes care
+        # of this)
+        env = Transpose(env)
     env = wrap_deepmind_pytorch(
-        env, episode_life, clip_rewards, frame_stack, scale)
+        env, episode_life=episode_life, clip_rewards=clip_rewards,
+        frame_stack=frame_stack, scale=scale, atari=atari)
     return env
 
 

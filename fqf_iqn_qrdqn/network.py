@@ -26,9 +26,10 @@ class Flatten(nn.Module):
 
 class DQNBase(nn.Module):
 
-    def __init__(self, num_channels, embedding_dim=7*7*64):
-        super(DQNBase, self).__init__()
+    def __init__(self, obs_shape):
+        super().__init__()
 
+        num_channels = obs_shape[0]
         self.net = nn.Sequential(
             nn.Conv2d(num_channels, 32, kernel_size=8, stride=4, padding=0),
             nn.ReLU(),
@@ -38,8 +39,12 @@ class DQNBase(nn.Module):
             nn.ReLU(),
             Flatten(),
         ).apply(initialize_weights_he)
-
-        self.embedding_dim = embedding_dim
+        with torch.no_grad():
+            fake_obs = torch.zeros((1, ) + obs_shape, dtype=torch.float32)
+            out_shape = self.net(fake_obs).shape
+        assert out_shape[0] == 1, out_shape
+        assert len(out_shape) == 2, out_shape
+        self.embedding_dim, = out_shape[1:]
 
     def forward(self, states):
         batch_size = states.shape[0]

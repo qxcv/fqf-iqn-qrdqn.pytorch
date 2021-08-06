@@ -23,10 +23,11 @@ class BaseAgent(ABC):
         self.env = env
         self.test_env = test_env
 
-        torch.manual_seed(seed)
-        np.random.seed(seed)
-        self.env.seed(seed)
-        self.test_env.seed(2**31-1-seed)
+        if seed is not None:
+            torch.manual_seed(seed)
+            np.random.seed(seed)
+            self.env.seed(seed)
+            self.test_env.seed(2**31-1-seed)
         # torch.backends.cudnn.deterministic = True  # It harms a performance.
         # torch.backends.cudnn.benchmark = False  # It harms a performance.
 

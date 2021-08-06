@@ -5,13 +5,14 @@ from fqf_iqn_qrdqn.network import DQNBase, CosineEmbeddingNetwork,\
 
 class FQF(BaseModel):
 
-    def __init__(self, num_channels, num_actions, N=32, num_cosines=32,
-                 embedding_dim=7*7*64, dueling_net=False, noisy_net=False,
-                 target=False):
+    def __init__(self, obs_shape, num_actions, N=32, num_cosines=32,
+                 dueling_net=False, noisy_net=False, target=False):
         super(FQF, self).__init__()
 
         # Feature extractor of DQN.
-        self.dqn_net = DQNBase(num_channels=num_channels)
+        num_channels = obs_shape[0]
+        self.dqn_net = DQNBase(obs_shape)
+        embedding_dim = self.dqn_net.embedding_dim
         # Cosine embedding network.
         self.cosine_net = CosineEmbeddingNetwork(
             num_cosines=num_cosines, embedding_dim=embedding_dim,
@@ -19,7 +20,7 @@ class FQF(BaseModel):
         # Quantile network.
         self.quantile_net = QuantileNetwork(
             num_actions=num_actions, dueling_net=dueling_net,
-            noisy_net=noisy_net)
+            embedding_dim=embedding_dim, noisy_net=noisy_net)
 
         # Fraction proposal network.
         if not target:
