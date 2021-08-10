@@ -260,6 +260,23 @@ class Transpose(gym.ObservationWrapper):
         return np.transpose(observation, (2, 0, 1))
 
 
+class MAGICALDenseReward(gym.Wrapper):
+    """Turns MAGICAL environments into dense-reward RL problems by giving the
+    end-of-episode goal _at each timestep_ (scaled by the horizon, to keep
+    return in the [0,1] range). This is going to add weird local minima to the
+    policy optimisation problem, but will hopefully not change the optimal
+    policy too much."""
+    def step(self, action):
+        observation, reward, done, info = self.env.step(action)
+        score = self.env.unwrapped.score_on_end_of_traj()
+        assert float(score) == score, score
+        # ensures returns are always in [0,1]
+        horizon = self.env.unwrapped.max_episode_steps
+        assert isinstance(horizon, int), horizon
+        new_rew = score / horizon
+        return observation, new_rew, done, info
+
+
 class LazyFrames(object):
     def __init__(self, frames):
         self._frames = frames
@@ -296,7 +313,8 @@ def make_atari(env_id):
 
 
 def wrap_deepmind_pytorch(env, episode_life=True, clip_rewards=True,
-                          frame_stack=True, scale=False, atari=True):
+                          frame_stack=True, scale=False, *,
+                          benchmark_name):
     """
     Configure environment for DeepMind-style Atari.
     :param env: (Gym Environment) the atari environment
@@ -304,9 +322,11 @@ def wrap_deepmind_pytorch(env, episode_life=True, clip_rewards=True,
     :param clip_rewards: (bool) wrap the reward clipping wrapper
     :param frame_stack: (bool) wrap the frame stacking wrapper
     :param scale: (bool) wrap the scaling observation wrapper
+    :param benchmark_name: (str) atari|magical|procgen
     :return: (Gym Environment) the wrapped atari environment
     """
-    if episode_life:
+    atari = benchmark_name == 'atari'
+    if atari and episode_life:
         env = EpisodicLifeEnv(env)
     if atari and 'FIRE' in env.unwrapped.get_action_meanings():
         env = FireResetEnv(env)
@@ -321,18 +341,27 @@ def wrap_deepmind_pytorch(env, episode_life=True, clip_rewards=True,
     return env
 
 
-def make_pytorch_env(env_id, episode_life=True, clip_rewards=True,
-                     frame_stack=True, scale=False, atari=True):
-    if atari:
+def make_pytorch_env(
+        env_id, episode_life=True, clip_rewards=True, frame_stack=True,
+        scale=False, benchmark_name='atari'):
+    if benchmark_name == 'atari':
         env = make_atari(env_id)
     else:
+        assert 'procgen' or '-LoRes' in env_id, \
+            f'env_id={env_id} does not look like a procgen or MAGICAL env ' \
+            '(MAGICAL must use -LoRes* postprocessors)'
+        assert benchmark_name in {'procgen', 'magical'}, benchmark_name
         env = gym.make(env_id)
         # assume that observations are H*W*C (normally atari preproc takes care
         # of this)
         env = Transpose(env)
+        if benchmark_name == 'magical':
+            env = MAGICALDenseReward(env)
+            assert not frame_stack, "magical envs should have frame stack " \
+                "applied using relevant env variant (e.g. -LoRes4E)"
     env = wrap_deepmind_pytorch(
         env, episode_life=episode_life, clip_rewards=clip_rewards,
-        frame_stack=frame_stack, scale=scale, atari=atari)
+        frame_stack=frame_stack, scale=scale, benchmark_name=benchmark_name)
     return env
 
 
